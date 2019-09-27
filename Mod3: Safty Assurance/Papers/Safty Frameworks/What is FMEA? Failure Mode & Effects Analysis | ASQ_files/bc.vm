@@ -1,0 +1,2 @@
+window.pageViewer.check(1,1);
+window.pageViewer.update('0.4544835880503205', 'https://images.boldchat.com/images/clear.gif', null, null);
