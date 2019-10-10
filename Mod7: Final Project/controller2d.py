@@ -113,8 +113,15 @@ class Controller2D(object):
             Example: Accessing the value from 'v_previous' to be used
             throttle_output = 0.5 * self.vars.v_previous
         """
-        self.vars.create_var('v_previous', 0.0)
+        kp = 20
+        ki = 3.0
+        kd = 0
+        x_two_dot = 0
+        k_err = 1
+        
 
+        self.vars.create_var('v_previous', 0.0)
+        self.vars.create_var('e_cross', 0.0)
         # Skip the first frame to store previous values properly
         if self._start_control_loop:
             """
@@ -158,13 +165,32 @@ class Controller2D(object):
                 Implement a longitudinal controller here. Remember that you can
                 access the persistent variables declared above here. For
                 example, can treat self.vars.v_previous like a "global variable".
+
             """
-            
+            self.vars.create_var('iter', 0)
+            v_desired = waypoints[self.vars.iter][2]
+
+            if self.vars.iter != 0:
+                v_desired_prev = waypoints[self.vars.iter-1][2]
+            else:
+                v_desired_prev = 0
+
+            self.vars.iter = self.vars.iter+1
+
+            x_two_dot  = kp*(v_desired - v) + ki*((v_desired - v)*t) + kd*(((v_desired - v)-(v_desired_prev - self.vars.v_previous))/t)
+
+            v = self.vars.v_previous + x_two_dot * t
+
+
             # Change these outputs with the longitudinal controller. Note that
             # brake_output is optional and is not required to pass the
             # assignment, as the car will naturally slow down over time.
-            throttle_output = 0
-            brake_output    = 0
+            if x_two_dot > 0:
+                throttle_output = x_two_dot
+                brake_output    = 0  
+            else:
+                throttle_output = 0
+                brake_output    = x_two_dot
 
             ######################################################
             ######################################################
@@ -176,9 +202,16 @@ class Controller2D(object):
                 access the persistent variables declared above here. For
                 example, can treat self.vars.v_previous like a "global variable".
             """
+            e_cross = (np.sin(yaw - steer_output))
             
             # Change the steer output with the lateral controller. 
-            steer_output    = 0
+            steer  = yaw + np.arctan(k_err*e_cross/v)
+            if steer > 1.22:
+                steer_output = 1.22
+            elif steer < -1.22:
+                steer_output = -1.22
+            else:
+                steer_output = steer
 
             ######################################################
             # SET CONTROLS OUTPUT
@@ -198,3 +231,4 @@ class Controller2D(object):
             in the next iteration)
         """
         self.vars.v_previous = v  # Store forward speed to be used in next step
+        self.vars.e_cross = e_cross
