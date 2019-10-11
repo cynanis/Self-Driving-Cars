@@ -116,14 +116,12 @@ class Controller2D(object):
         kp = 9
         ki = 3.0
         kd = 0.3
-        k_err = 1
         self.vars.create_var('v_previous', 0.0)
         self.vars.create_var('t_previous',0.0)
         self.vars.create_var('error_previous',0.0)
         self.vars.create_var('integral_previous',0.0)
         self.vars.create_var("acc_previous",0.0)
         self.vars.create_var("throttle_previous",0.0)
-        self.vars.create_var('e_cross', 0.0)
         # Skip the first frame to store previous values properly
         if self._start_control_loop:
             """
@@ -184,7 +182,7 @@ class Controller2D(object):
             # Change these outputs with the longitudinal controller. Note that
             # brake_output is optional and is not required to pass the
             # assignment, as the car will naturally slow down over time.
-            if acc > 0
+            if acc > 0:
                 if acc_diff > 0:
                     throttle_output = min(1,self.vars.throttle_previous + 1/(1+np.exp(-acc_diff)))
                 else:
@@ -202,16 +200,45 @@ class Controller2D(object):
                 access the persistent variables declared above here. For
                 example, can treat self.vars.v_previous like a "global variable".
             """
-            e_cross = (np.sin(yaw - steer_output))
+            # Stanly Controller
+            k_err = 1
+
+            #HEADING ERROR
+            #the slop of the desired path
+            path_slop = (waypoints[-1][0] - waypoints[0][0])/ (waypoints[-1][1]-waypoints[0][1])#(Yf - Yi)/(Xf - Xi)
+            #heading of the path
+            path_heading = np.arctan(path_slop)
+            vehicle_heading = yaw
+            #(yaw angle) heading of the vehicle with respect to the path
+            heading_yaw = path_heading - vehicle_heading
+            #if the yaw angle is greater than pi then heading_yaw = 2*pi - heading_yaw
+            if heading_yaw > np.pi:
+                heading_yaw = 2*np.pi - heading_yaw
+            elif heading_yaw < -np.pi:
+                heading_yaw = 2*np.pi + heading_yaw
+            
+            #CROSSTRACK ERROR
+            #distance from  center of front axle to closest point on the path
+            xy = np.array([x,y])
+            #crosstrack error
+            crosstrack_error = np.min(np.sum((xy - np.array(waypoints)[:,:2])**2,axis=1))
+            # #(path_heading_center)path heading at the nearest point of the path to the center of front axle
+            # path_heading_center = np.arctan2(y-waypoints[0][1],x-waypoints[0][0])
+
+
+
+
             
             # Change the steer output with the lateral controller. 
-            steer  = yaw + np.arctan(k_err*e_cross/v)
+            steer_cross_track  = np.arctan(k_err*crosstrack_error/v)
+            steer = heading_yaw +  steer_cross_track
+
             if steer > 1.22:
-                steer_output = 1.22
+                steer= 1.22
             elif steer < -1.22:
-                steer_output = -1.22
-            else:
-                steer_output = steer
+                steer = -1.22
+
+            steer_output = steer
 
             ######################################################
             # SET CONTROLS OUTPUT
@@ -236,4 +263,4 @@ class Controller2D(object):
         self.vars.integral_previous = integral
         self.vars.acc_previous = acc
         self.vars.throttle_previous = throttle_output
-        self.vars.e_cross = e_cross
+
