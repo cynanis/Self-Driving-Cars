@@ -184,8 +184,11 @@ class Controller2D(object):
             # Change these outputs with the longitudinal controller. Note that
             # brake_output is optional and is not required to pass the
             # assignment, as the car will naturally slow down over time.
-            if acc_diff > 0:
-                throttle_output = self.vars.throttle_previous + 1/(1+np.exp(-acc_diff))
+            if acc > 0
+                if acc_diff > 0:
+                    throttle_output = min(1,self.vars.throttle_previous + 1/(1+np.exp(-acc_diff)))
+                else:
+                    throttle_output = self.vars.throttle_previous
             else:
                 throttle_output = 0
 
