@@ -113,14 +113,16 @@ class Controller2D(object):
             Example: Accessing the value from 'v_previous' to be used
             throttle_output = 0.5 * self.vars.v_previous
         """
-        kp = 20
+        kp = 9
         ki = 3.0
-        kd = 0
-        x_two_dot = 0
+        kd = 0.3
         k_err = 1
-        
-
         self.vars.create_var('v_previous', 0.0)
+        self.vars.create_var('t_previous',0.0)
+        self.vars.create_var('error_previous',0.0)
+        self.vars.create_var('integral_previous',0.0)
+        self.vars.create_var("acc_previous",0.0)
+        self.vars.create_var("throttle_previous",0.0)
         self.vars.create_var('e_cross', 0.0)
         # Skip the first frame to store previous values properly
         if self._start_control_loop:
@@ -167,30 +169,25 @@ class Controller2D(object):
                 example, can treat self.vars.v_previous like a "global variable".
 
             """
-            self.vars.create_var('iter', 0)
-            v_desired = waypoints[self.vars.iter][2]
+            time_period = t - self.vars.t_previous
 
-            if self.vars.iter != 0:
-                v_desired_prev = waypoints[self.vars.iter-1][2]
-            else:
-                v_desired_prev = 0
+            error = v_desired - v
 
-            self.vars.iter = self.vars.iter+1
+            integral = self.vars.integral_previous + error * time_period
 
-            x_two_dot  = kp*(v_desired - v) + ki*((v_desired - v)*t) + kd*(((v_desired - v)-(v_desired_prev - self.vars.v_previous))/t)
+            diff = (error - self.vars.error_previous)/time_period
+            
+            acc = kp * error + ki * integral + kd * diff
 
-            v = self.vars.v_previous + x_two_dot * t
-
+            acc_diff = acc - self.vars.acc_previous
 
             # Change these outputs with the longitudinal controller. Note that
             # brake_output is optional and is not required to pass the
             # assignment, as the car will naturally slow down over time.
-            if x_two_dot > 0:
-                throttle_output = x_two_dot
-                brake_output    = 0  
+            if acc_diff > 0:
+                throttle_output = self.vars.throttle_previous + 1/(1+np.exp(-acc_diff))
             else:
                 throttle_output = 0
-                brake_output    = x_two_dot
 
             ######################################################
             ######################################################
@@ -231,4 +228,9 @@ class Controller2D(object):
             in the next iteration)
         """
         self.vars.v_previous = v  # Store forward speed to be used in next step
+        self.vars.t_previous = t
+        self.vars.error_previous = error
+        self.vars.integral_previous = integral
+        self.vars.acc_previous = acc
+        self.vars.throttle_previous = throttle_output
         self.vars.e_cross = e_cross
