@@ -168,6 +168,7 @@ class Controller2D(object):
                 example, can treat self.vars.v_previous like a "global variable".
 
             """
+            
             time_period = t - self.vars.t_previous
 
             error = v_desired - v
@@ -184,14 +185,16 @@ class Controller2D(object):
             # assignment, as the car will naturally slow down over time.
             if acc > 0:
                 
-                    throttle_output = min(1,acc)
+                    throttle_output = min(1,1.0 / (1.0 + np.exp(-acc)))
                     brake_output = 0
                     
             else:
                 throttle_output = 0
                 brake_output = max(1,-acc)
                 
-
+            if v > 5 * v_desired:
+                brake_output = 1
+                throttle_output = 0
            
             ######################################################
             ######################################################
@@ -209,13 +212,18 @@ class Controller2D(object):
             ### HEADING ERROR ###
             #current waypoint index
             i = self.vars.iter
-            #next wypoint index
+            #next waypoint index
+             
             k =  i + 1
+            if i == len(waypoints[:][0]) -1:
+                k = i
+
+
             #path equation aX + bY + c = 0 => Y = -a/b*X -c
             #path slop (Yf - Yi)/(Xi - Xf)
-            path_slop = (waypoints[k][1] - waypoints[i][1])/ (waypoints[i][0]-waypoints[k][0])
+            path_slop =(waypoints[k][1] - waypoints[i][1])/ (waypoints[k][0]-waypoints[i][0])
             #heading of the path
-            path_heading = np.arctan2((waypoints[k][1] - waypoints[i][1]),(waypoints[i][0]-waypoints[k][0]))
+            path_heading = np.arctan2((waypoints[k][1] - waypoints[i][1]),(-waypoints[i][0]+waypoints[k][0]))
             #vehicle heading
             vehicle_heading = yaw
             #(yaw angle) heading of the vehicle with respect to the path
@@ -227,19 +235,24 @@ class Controller2D(object):
             elif heading_error < -np.pi:
                 heading_error += self._2pi 
 
-            #print("heading error {}".format(heading_error))
+            print("heading error {}".format(heading_error))
                 
             # #CROSSTRACK ERROR
             k_err = 0.4
             #solve for " a,b,c" for the path equation aX + bY + c = 0 
             # c = -slop * X - Y
-            c = (path_slop*waypoints[i][0]) - waypoints[i][1]
+            # c = (path_slop*waypoints[i][0]) - waypoints[i][1]
+            # ck = (path_slop*waypoints[k][0]) - waypoints[k][1]
             # path_slop = - a/b
-            b = -1
-            a = path_slop
+            # b = -1
+            # a = path_slop
             
-            # A = np.array([[waypoints[i][0],waypoints[i][1]],[waypoints[i+k][0],waypoints[i+k][1]]])
-            # B = np.array([c,c])303030
+            c = -1
+
+            b = -1 / (path_slop * waypoints[i][0] - waypoints[i][1])
+            a = - path_slop * b
+            # A = np.array([[waypoints[i][0],waypoints[i][1]],[waypoints[k][0],waypoints[k][1]]])
+            # B = np.array([-c,-ck])
             # solution = np.linalg.solve(A, B)
            
             # a = solution[0]
@@ -288,4 +301,3 @@ class Controller2D(object):
         self.vars.iter += 1
         # self.vars.acc_previous = acc
         # self.vars.throttle_previous = throttle_output
-
