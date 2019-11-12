@@ -120,7 +120,6 @@ class Controller2D(object):
         self.vars.create_var('t_previous',0.0)
         self.vars.create_var('error_previous',0.0)
         self.vars.create_var('integral_previous',0.0)
-        self.vars.create_var('iter',0)
         # self.vars.create_var("acc_previous",0.0)
         # self.vars.create_var("throttle_previous",0.0)
         # Skip the first frame to store previous values properly
@@ -170,7 +169,7 @@ class Controller2D(object):
             """
             
             time_period = t - self.vars.t_previous
-
+            print("vehicle speed {}".format(v))
             error = v_desired - v
 
             integral = self.vars.integral_previous + error * time_period
@@ -185,7 +184,7 @@ class Controller2D(object):
             # assignment, as the car will naturally slow down over time.
             if acc > 0:
                 
-                    throttle_output = min(1,1.0 / (1.0 + np.exp(-acc)))
+                    throttle_output = min(1,acc) #1.0 / (1.0 + np.exp(-acc))
                     brake_output = 0
                     
             else:
@@ -196,6 +195,7 @@ class Controller2D(object):
                 brake_output = 1
                 throttle_output = 0
            
+            
             ######################################################
             ######################################################
             # MODULE 7: IMPLEMENTATION OF LATERAL CONTROLLER HERE
@@ -210,20 +210,13 @@ class Controller2D(object):
             
 
             ### HEADING ERROR ###
-            #current waypoint index
-            i = self.vars.iter
-            #next waypoint index
-             
-            k =  i + 1
-            if i == len(waypoints[:][0]) -1:
-                k = i
-
+            
 
             #path equation aX + bY + c = 0 => Y = -a/b*X -c
             #path slop (Yf - Yi)/(Xi - Xf)
-            path_slop =(waypoints[k][1] - waypoints[i][1])/ (waypoints[k][0]-waypoints[i][0])
+            path_slop = (waypoints[-1][1]-waypoints[0][1])/ (waypoints[-1][0]-waypoints[0][0])#(waypoints[k][1] - waypoints[i][1])/ (waypoints[k][0]-waypoints[i][0])
             #heading of the path
-            path_heading = np.arctan2((waypoints[k][1] - waypoints[i][1]),(-waypoints[i][0]+waypoints[k][0]))
+            path_heading = np.arctan2(waypoints[-1][1]-waypoints[0][1], waypoints[-1][0]-waypoints[0][0]) #np.arctan2((waypoints[k][1] - waypoints[i][1]),(waypoints[k][0] - waypoints[i][0]))
             #vehicle heading
             vehicle_heading = yaw
             #(yaw angle) heading of the vehicle with respect to the path
@@ -238,7 +231,7 @@ class Controller2D(object):
             print("heading error {}".format(heading_error))
                 
             # #CROSSTRACK ERROR
-            k_err = 0.4
+            k_err = 0.6
             #solve for " a,b,c" for the path equation aX + bY + c = 0 
             # c = -slop * X - Y
             # c = (path_slop*waypoints[i][0]) - waypoints[i][1]
@@ -249,7 +242,7 @@ class Controller2D(object):
             
             c = -1
 
-            b = -1 / (path_slop * waypoints[i][0] - waypoints[i][1])
+            b = -1 / (path_slop * waypoints[0][0] - waypoints[0][1])
             a = - path_slop * b
             # A = np.array([[waypoints[i][0],waypoints[i][1]],[waypoints[k][0],waypoints[k][1]]])
             # B = np.array([-c,-ck])
@@ -298,6 +291,6 @@ class Controller2D(object):
         self.vars.t_previous = t
         self.vars.error_previous = error
         self.vars.integral_previous = integral
-        self.vars.iter += 1
+       
         # self.vars.acc_previous = acc
         # self.vars.throttle_previous = throttle_output
