@@ -214,48 +214,46 @@ class Controller2D(object):
 
             #path equation aX + bY + c = 0 => Y = -a/b*X -c
             #path slop (Yf - Yi)/(Xi - Xf)
-            path_slop = (waypoints[-1][1]-waypoints[0][1])/ (waypoints[-1][0]-waypoints[0][0])#(waypoints[k][1] - waypoints[i][1])/ (waypoints[k][0]-waypoints[i][0])
+            path_slop = (waypoints[-1][1]-waypoints[0][1])/ (waypoints[-1][0]-waypoints[0][0])
+
             #heading of the path
-            path_heading = np.arctan2(waypoints[-1][1]-waypoints[0][1], waypoints[-1][0]-waypoints[0][0]) #np.arctan2((waypoints[k][1] - waypoints[i][1]),(waypoints[k][0] - waypoints[i][0]))
+            path_heading = np.arctan2(waypoints[-1][1]-waypoints[0][1], waypoints[-1][0]-waypoints[0][0])
+
             #vehicle heading
             vehicle_heading = yaw
+
             #(yaw angle) heading of the vehicle with respect to the path
-            heading_error = path_heading - vehicle_heading
-            #print("heading error {}".format(heading_error))
-            #if the yaw angle is greater than pi then heading_yaw = 2*pi - heading_yaw
+            heading_error = path_heading - vehicle_heading  
             if heading_error > np.pi:
                 heading_error -= self._2pi
             elif heading_error < -np.pi:
                 heading_error += self._2pi 
-
             print("heading error {}".format(heading_error))
                 
             # #CROSSTRACK ERROR
             k_err = 0.6
-            #solve for " a,b,c" for the path equation aX + bY + c = 0 
-            # c = -slop * X - Y
-            # c = (path_slop*waypoints[i][0]) - waypoints[i][1]
-            # ck = (path_slop*waypoints[k][0]) - waypoints[k][1]
-            # path_slop = - a/b
-            # b = -1
-            # a = path_slop
             
             c = -1
-
             b = -1 / (path_slop * waypoints[0][0] - waypoints[0][1])
             a = - path_slop * b
-            # A = np.array([[waypoints[i][0],waypoints[i][1]],[waypoints[k][0],waypoints[k][1]]])
-            # B = np.array([-c,-ck])
-            # solution = np.linalg.solve(A, B)
            
-            # a = solution[0]
-            # b = solution[1]
-            # cross track error
+            # cross track error 
             crosstrack_error = (a*x + b*y + c)/(np.sqrt(a**2 + b**2))
+            vehicle_path_angle = np.arctan2(y-waypoints[0][1], x-waypoints[0][0])
+            path_to_vehicle_diff = path_heading - vehicle_path_angle
+            if path_to_vehicle_diff > np.pi:
+                path_to_vehicle_diff -= 2 * np.pi
+            if path_to_vehicle_diff < - np.pi:
+                path_to_vehicle_diff += 2 * np.pi
+            if path_to_vehicle_diff > 0:
+                crosstrack_error = abs(crosstrack_error)
+            else:
+                crosstrack_error = - abs(crosstrack_error)
             print("cross_error {}".format(crosstrack_error))
             print("steer_cross_track {}".format(np.arctan(k_err*crosstrack_error/v)))
+            yaw_cross_track = np.arctan(k_err*crosstrack_error/v)
             # Change the steer output with the lateral controller. 
-            steer = heading_error +  np.arctan(k_err*crosstrack_error/v)
+            steer = heading_error +  yaw_cross_track
             #print("steer {}".format(steer))
             
             if steer > self._pi:
