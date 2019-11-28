@@ -147,8 +147,8 @@ def measurement_update(sensor_var, p_cov_check, y_k, p_check, v_check, q_check):
     q = Quaternion(euler = delta_x[6:])
     q_hat = q.quat_mult_left(q_check)
     # 3.4 Compute corrected covariance
-    p_hat = np.dot((1 - np.dot(K_k,h_jac)),p_check)
-    
+    p_cov_hat = np.dot((1 - np.dot(K_k,h_jac)),p_check)
+
     return p_hat, v_hat, q_hat, p_cov_hat
 
 #### 5. Main Filter Loop #######################################################################
