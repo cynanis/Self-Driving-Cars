@@ -46,20 +46,33 @@ imu_f = data['imu_f']
 imu_w = data['imu_w']
 gnss = data['gnss']
 lidar = data['lidar']
+# print("imu_f data: {}".format(imu_f.data.shape))
+print("imu_f Timestamps shape: {}".format(imu_f.t.shape))
+# # print("imu_f Timestamps: {}".format(imu_f.t))
+
+# print("imu_w data: {}".format(imu_w.data.shape))
+# print("gnss data: {}".format(gnss.data.shape))
+# print("Lidar data: {}".format(lidar.data.shape))
+# print("Lidar timestamp shape: {}".format(lidar.t.shape))
+# print("Lidar timestamp: {}".format(lidar.t))
+
+
+
+
 
 ################################################################################################
 # Let's plot the ground truth trajectory to see what it looks like. When you're testing your
 # code later, feel free to comment this out.
 ################################################################################################
-gt_fig = plt.figure()
-ax = gt_fig.add_subplot(111, projection='3d')
-ax.plot(gt.p[:,0], gt.p[:,1], gt.p[:,2])
-ax.set_xlabel('x [m]')
-ax.set_ylabel('y [m]')
-ax.set_zlabel('z [m]')
-ax.set_title('Ground Truth trajectory')
-ax.set_zlim(-1, 5)
-plt.show()
+# gt_fig = plt.figure()
+# ax = gt_fig.add_subplot(111, projection='3d')
+# ax.plot(gt.p[:,0], gt.p[:,1], gt.p[:,2])
+# ax.set_xlabel('x [m]')
+# ax.set_ylabel('y [m]')
+# ax.set_zlabel('z [m]')
+# ax.set_title('Ground Truth trajectory')
+# ax.set_zlim(-1, 5)
+# plt.show()
 
 ################################################################################################
 # Remember that our LIDAR data is actually just a set of positions estimated from a separate
@@ -137,17 +150,24 @@ lidar_i = 0
 def measurement_update(sensor_var, p_cov_check, y_k, p_check, v_check, q_check):
     # 3.1 Compute Kalman Gain
     # K_k = p_cov_check * H_k.T*inv(H_k*p_cov_check*H_k.T - R)
-    K_k = np.dot(np.dot(p_cov_check,h_jac.T),np.linalg.inv(np.dot(np.dot(h_jac,p_cov_check),h_jac.T) - sensor_var))
+    K_k = np.dot(np.dot(p_cov_check,h_jac.T),np.linalg.inv(np.dot(np.dot(h_jac,p_cov_check),h_jac.T) + sensor_var))
     # 3.2 Compute error state
     # delta_x = K_k*(y_k - p_check)
+    # print("K_k {}".format(K_k.shape))
+    
+    # print("y_k {}".format(y_k.shape))
+    # print("p_check {}".format(p_check.shape))
     delta_x = np.dot(K_k,(y_k - p_check))
     # 3.3 Correct predicted state
     p_hat = p_check + delta_x[:3]
     v_hat = v_check + delta_x[3:6]
+    #q_check = Quaternion(euler=q_check)
     q = Quaternion(euler = delta_x[6:])
-    q_hat = q.quat_mult_left(q_check)
+    q_hat = q.quat_mult_right(q_check)
     # 3.4 Compute corrected covariance
-    p_cov_hat = np.dot((1 - np.dot(K_k,h_jac)),p_check)
+    # print("h_jac {}".format(h_jac.shape))
+
+    p_cov_hat = np.dot((np.eye(9) - np.dot(K_k,h_jac)),p_cov_check)
 
     return p_hat, v_hat, q_hat, p_cov_hat
 
@@ -157,19 +177,75 @@ def measurement_update(sensor_var, p_cov_check, y_k, p_check, v_check, q_check):
 # Now that everything is set up, we can start taking in the sensor data and creating estimates
 # for our state in a loop.
 ################################################################################################
+
 for k in range(1, imu_f.data.shape[0]):  # start at 1 b/c we have initial prediction from gt
     delta_t = imu_f.t[k] - imu_f.t[k - 1]
 
+    
     # 1. Update state with IMU inputs
+    rotation_matrix = Quaternion(*q_est[k-1]).to_mat()
+    p_check = p_est[k-1] + delta_t * v_est[k-1] + (delta_t**2)*(np.dot(rotation_matrix,imu_f.data[k-1]) + g)/2 #may be g need transopose
+    v_check = v_est[k-1] + delta_t * (np.dot(rotation_matrix,imu_f.data[k-1]) + g)
+
+    
+    #q = np.array([[np.cos(imu_w.data[k-1]*delta_t)],[((imu_w.data[k-1]*delta_t)/abs(imu_w.data[k-1]*delta_t))*np.sin(abs(imu_w.data[k-1]*delta_t)/2)]])
+    # print(imu_w.data[k-1]*delta_t)
+    q = Quaternion(euler=imu_w.data[k-1]*delta_t)
+    q_check = q.quat_mult_left(q_est[k-1])
+    # q_check = Quaternion(q_est[k-1][0],q_est[k-1][1],q_est[k-1][2],q_est[k-1][3])
+    # q_check = q_check.quat_mult_right(q,out='Quaternion').to_euler()
 
     # 1.1 Linearize the motion model and compute Jacobians
+    # motion model jacobian
+    F_jac = np.eye(9)
+    F_jac[:3,3:6] = np.eye(3)*delta_t
+    F_jac[3:6,6:] = -skew_symmetric(np.dot(rotation_matrix,imu_f.data[k-1]))*delta_t
+    #measurment noise
+    Q_k = np.eye(6)
+    Q_k[:3,:3] = np.eye(3) * var_imu_f
+    Q_k[3:,3:] = np.eye(3) * var_imu_w
+    Q_k = Q_k * delta_t**2
+
+    # n_k = np.zeros(6)
+    # n_k[:3] = var_imu_f
+    # n_k[3:] =  var_imu_w
+    # n_k = n_k * delta_t**2
+    # predicted Error Dynamics
+    # delta_x = np.zeros(9)
+    # delta_x[:3] = p_check
+    # delta_x[3:6] = v_check
+    # delta_x[6:] = q_check
+    # print("delta_x {}".format(delta_x.shape))
+    # print("F_jac {}".format(F_jac.shape))
+    # print("l_jac {}".format(l_jac.shape))
+    # print("n_k {}".format(n_k.shape))
+
+
+    # delta_x = np.dot(F_jac,delta_x) + np.dot(l_jac,n_k)# *************l_jac.dot(Q_k)---- shape(9,6)
+    # print("delta_x {}".format(delta_x.shape))
+
+   
 
     # 2. Propagate uncertainty
-
+    p_cov_check =np.dot(np.dot(F_jac,p_cov[k-1]),F_jac.T) + np.dot(np.dot(l_jac,Q_k),l_jac.T)
     # 3. Check availability of GNSS and LIDAR measurements
 
+    gnss_var = np.eye(3) * var_gnss
+    if gnss_i < gnss.t.shape[0]:
+        if gnss.t[gnss_i] == imu_f.t[k-1]:       
+            p_check, v_check, q_check, p_cov_check = measurement_update(gnss_var,p_cov_check,gnss.data[gnss_i],p_check,v_check,q_check)
+            gnss_i += 1
+        
+    lidar_var = np.eye(3) * var_lidar
+    if lidar_i < lidar.t.shape[0]:
+        if lidar.t[lidar_i] ==imu_f.t[k-1]:
+            p_check, v_check, q_check, p_cov_check = measurement_update(lidar_var,p_cov_check,lidar.data[lidar_i],p_check,v_check,q_check)
+            lidar_i += 1
     # Update states (save)
-
+    p_est[k] = p_check
+    v_est[k] = v_check
+    q_est[k] = q_check
+    p_cov[k] = p_cov_check
 #### 6. Results and Analysis ###################################################################
 
 ################################################################################################
