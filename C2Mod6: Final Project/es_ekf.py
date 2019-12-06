@@ -111,8 +111,9 @@ lidar.data = (C_li @ lidar.data.T).T + t_i_li
 ################################################################################################
 var_imu_f = 0.10
 var_imu_w = 0.25
-var_gnss  = 0.01
-var_lidar = 1.00
+var_gnss  = 0.3
+var_lidar = 1.5
+#micalibration var_lidar = 6.0
 
 ################################################################################################
 # We can also set up some constants that won't change for any iteration of our solver.
@@ -162,8 +163,8 @@ def measurement_update(sensor_var, p_cov_check, y_k, p_check, v_check, q_check):
     p_hat = p_check + delta_x[:3]
     v_hat = v_check + delta_x[3:6]
     #q_check = Quaternion(euler=q_check)
-    q = Quaternion(euler = delta_x[6:])
-    q_hat = q.quat_mult_right(q_check)
+    q = Quaternion(axis_angle=delta_x[6:])
+    q_hat = q.quat_mult_left(q_check)
     # 3.4 Compute corrected covariance
     # print("h_jac {}".format(h_jac.shape))
 
@@ -183,15 +184,16 @@ for k in range(1, imu_f.data.shape[0]):  # start at 1 b/c we have initial predic
 
     
     # 1. Update state with IMU inputs
-    rotation_matrix = Quaternion(*q_est[k-1]).to_mat()
-    p_check = p_est[k-1] + delta_t * v_est[k-1] + (delta_t**2)*(np.dot(rotation_matrix,imu_f.data[k-1]) + g)/2 #may be g need transopose
-    v_check = v_est[k-1] + delta_t * (np.dot(rotation_matrix,imu_f.data[k-1]) + g)
+    C_ns = Quaternion(*q_est[k-1]).to_mat()
+    f_k_C_ns = np.dot(C_ns,imu_f.data[k-1])
+    p_check = p_est[k-1] + delta_t * v_est[k-1] + (delta_t**2 / 2)*(f_k_C_ns + g)#may be g need transopose
+    v_check = v_est[k-1] + delta_t * (f_k_C_ns + g)
 
     
     #q = np.array([[np.cos(imu_w.data[k-1]*delta_t)],[((imu_w.data[k-1]*delta_t)/abs(imu_w.data[k-1]*delta_t))*np.sin(abs(imu_w.data[k-1]*delta_t)/2)]])
     # print(imu_w.data[k-1]*delta_t)
     q = Quaternion(euler=imu_w.data[k-1]*delta_t)
-    q_check = q.quat_mult_left(q_est[k-1])
+    q_check = q.quat_mult_right(q_est[k-1])
     # q_check = Quaternion(q_est[k-1][0],q_est[k-1][1],q_est[k-1][2],q_est[k-1][3])
     # q_check = q_check.quat_mult_right(q,out='Quaternion').to_euler()
 
@@ -199,35 +201,21 @@ for k in range(1, imu_f.data.shape[0]):  # start at 1 b/c we have initial predic
     # motion model jacobian
     F_jac = np.eye(9)
     F_jac[:3,3:6] = np.eye(3)*delta_t
-    F_jac[3:6,6:] = -skew_symmetric(np.dot(rotation_matrix,imu_f.data[k-1]))*delta_t
+    F_jac[3:6,6:] = -skew_symmetric(f_k_C_ns)*delta_t
     #measurment noise
     Q_k = np.eye(6)
-    Q_k[:3,:3] = np.eye(3) * var_imu_f
-    Q_k[3:,3:] = np.eye(3) * var_imu_w
+    Q_k[:,:3] *= var_imu_f 
+    Q_k[:,3:] *= var_imu_w
     Q_k = Q_k * delta_t**2
 
-    # n_k = np.zeros(6)
-    # n_k[:3] = var_imu_f
-    # n_k[3:] =  var_imu_w
-    # n_k = n_k * delta_t**2
-    # predicted Error Dynamics
-    # delta_x = np.zeros(9)
-    # delta_x[:3] = p_check
-    # delta_x[3:6] = v_check
-    # delta_x[6:] = q_check
     # print("delta_x {}".format(delta_x.shape))
     # print("F_jac {}".format(F_jac.shape))
     # print("l_jac {}".format(l_jac.shape))
-    # print("n_k {}".format(n_k.shape))
-
-
-    # delta_x = np.dot(F_jac,delta_x) + np.dot(l_jac,n_k)# *************l_jac.dot(Q_k)---- shape(9,6)
-    # print("delta_x {}".format(delta_x.shape))
-
-   
+    # print("n_k {}".format(n_k.shape))   
 
     # 2. Propagate uncertainty
     p_cov_check =np.dot(np.dot(F_jac,p_cov[k-1]),F_jac.T) + np.dot(np.dot(l_jac,Q_k),l_jac.T)
+    #p_cov_check = F_jac @ p_cov[k-1] @ F_jac.T + l_jac @ Q_k @ l_jac.T
     # 3. Check availability of GNSS and LIDAR measurements
 
     gnss_var = np.eye(3) * var_gnss
