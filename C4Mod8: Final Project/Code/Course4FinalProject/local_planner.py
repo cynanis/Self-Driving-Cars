@@ -80,6 +80,8 @@ class LocalPlanner:
                   v is the goal speed at the goal point.
                   all units are in m, m/s and radians
         """
+        ## IN THIS PART WE ARE TRANSFORMING THE GOAL STATE FROM THE GLOBAL FRAME TO LOCAL FRAME
+        #SO THAT IT IS OF THE FROM (x, y, t, v) in local frame
         # Compute the final heading based on the next index.
         # If the goal index is the last in the set of waypoints, use
         # the previous index instead.
@@ -87,17 +89,20 @@ class LocalPlanner:
         # consecutive waypoints, then use the np.arctan2() function.
         # TODO: INSERT YOUR CODE BETWEEN THE DASHED LINES
         # ------------------------------------------------------------------
-        # if ...
-        # delta_x = ...
-        # delta_y = ...
-        # else: ...
-        # ...
-        # heading = ...
+        if goal_index != len(waypoints[:][0]):
+            delta_x = waypoints[goal_index+1][0] - waypoints[goal_index][0]
+            delta_y = waypoints[goal_index+1][1] - waypoints[goal_index][1]
+        else: 
+            delta_x = waypoints[goal_index][0] - waypoints[goal_index-1][0]
+            delta_y = waypoints[goal_index][1] - waypoints[goal_index-1][1]
+        
+        #desired heading of of the path(gloabal path)
+        heading = np.arctan2(delta_y,delta_x)
         # ------------------------------------------------------------------
 
         # Compute the center goal state in the local frame using 
         # the ego state. The following code will transform the input
-        # goal state to the ego vehicle's local frame.
+        # goal state(global frame) to the ego vehicle's local frame.
         # The goal state will be of the form (x, y, t, v).
         goal_state_local = copy.copy(goal_state)
 
@@ -105,8 +110,8 @@ class LocalPlanner:
         # This is done by subtracting the ego_state from the goal_state_local.
         # TODO: INSERT YOUR CODE BETWEEN THE DASHED LINES
         # ------------------------------------------------------------------
-        # goal_state_local[0] -= ... 
-        # goal_state_local[1] -= ... 
+        goal_state_local[0] -= ego_state[0] 
+        goal_state_local[1] -= ego_state[1]
         # ------------------------------------------------------------------
 
         # Rotate such that the ego state has zero heading in the new frame.
@@ -116,15 +121,16 @@ class LocalPlanner:
         # current yaw corresponds to theta = 0 in the new local frame.
         # TODO: INSERT YOUR CODE BETWEEN THE DASHED LINES
         # ------------------------------------------------------------------
-        # goal_x = ...
-        # goal_y = ...
+        goal_x = goal_state_local[0] * np.cos(-ego_state[2])  - goal_state_local[1] * sin(-ego_state[2]) 
+        goal_y = goal_state_local[0] * np.sin(-ego_state[2])  + goal_state_local[1] * cos(-ego_state[2]) 
         # ------------------------------------------------------------------
 
         # Compute the goal yaw in the local frame by subtracting off the 
         # current ego yaw from the heading variable.
+        # new heading in the local frame is calculated by path heading(global frame) minus ego vehicle heading (local frame)
         # TODO: INSERT YOUR CODE BETWEEN THE DASHED LINES
         # ------------------------------------------------------------------
-        # goal_t = ...
+        goal_t = heading - ego_state[2]
         # ------------------------------------------------------------------
 
         # Velocity is preserved after the transformation.
@@ -136,6 +142,7 @@ class LocalPlanner:
         elif goal_t < -pi:
             goal_t += 2*pi
 
+        # KNOW WE OBTAIN THE GOAL STATE SET
         # Compute and apply the offset for each path such that
         # all of the paths have the same heading of the goal state, 
         # but are laterally offset with respect to the goal heading.
@@ -144,15 +151,15 @@ class LocalPlanner:
             # Compute offsets that span the number of paths set for the local
             # planner. Each offset goal will be used to generate a potential
             # path to be considered by the local planner.
-            offset = (i - self._num_paths // 2) * self._path_offset
+            offset = (i - (self._num_paths // 2)) * self._path_offset
 
             # Compute the projection of the lateral offset along the x
             # and y axis. To do this, multiply the offset by cos(goal_theta + pi/2)
             # and sin(goal_theta + pi/2), respectively.
             # TODO: INSERT YOUR CODE BETWEEN THE DASHED LINES
             # ------------------------------------------------------------------
-            # x_offset = ...
-            # y_offset = ...
+            x_offset = offset * cos(goal_t + (pi/2))
+            y_offset = offset * sin(goal_t + (pi/2))
             # ------------------------------------------------------------------
 
             goal_state_set.append([goal_x + x_offset, 
