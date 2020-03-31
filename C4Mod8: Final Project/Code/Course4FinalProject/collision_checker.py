@@ -82,8 +82,8 @@ class CollisionChecker:
 
                 # TODO: INSERT YOUR CODE BETWEEN THE DASHED LINES
                 # --------------------------------------------------------------
-                # circle_locations[:, 0] = ... 
-                # circle_locations[:, 1] = ...
+                circle_locations[:, 0] = path[j][0] + self._circle_offsets * np.cos(path[j][2])
+                circle_locations[:, 1] = path[j][1] + self._circle_offsets * np.sin(path[j][2])
                 # --------------------------------------------------------------
 
                 # Assumes each obstacle is approximated by a collection of
@@ -153,6 +153,7 @@ class CollisionChecker:
             best_index: The path index which is best suited for the vehicle to
                 navigate with.
         """
+        path_goal_index = len(paths[0])-1
         best_index = None
         best_score = float('Inf')
         for i in range(len(paths)):
@@ -164,7 +165,7 @@ class CollisionChecker:
                 # A lower score implies a more suitable path.
                 # TODO: INSERT YOUR CODE BETWEEN THE DASHED LINES
                 # --------------------------------------------------------------
-                # score = ...
+                score = np.sqrt((paths[i][0][path_goal_index] - goal_state[0])**2 + (paths[i][1][path_goal_index] - goal_state[1])**2)
                 # --------------------------------------------------------------
 
                 # Compute the "proximity to other colliding paths" score and
@@ -177,7 +178,8 @@ class CollisionChecker:
                         if not collision_check_array[j]:
                             # TODO: INSERT YOUR CODE BETWEEN THE DASHED LINES
                             # --------------------------------------------------
-                            # score += self._weight * ...
+                            dis_score = np.min(np.sum(paths[i] - paths[j],axis=1))
+                            score += self._weight * dis_score
                             # --------------------------------------------------
 
                             pass
